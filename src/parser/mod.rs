@@ -1227,6 +1227,15 @@ fn build_when_condition(pair: Pair<Rule>) -> Option<WhenCondition> {
                 let actual = ci.next().map(|p| unquote(p.as_str())).unwrap_or_default();
                 Some(WhenCondition::Equals { actual, expected })
             }
+            Rule::when_generic => {
+                let mut ci = inner.into_inner();
+                let name = ci.next().map(|p| p.as_str().to_string()).unwrap_or_default();
+                let args: Vec<String> = ci
+                    .filter(|p| p.as_rule() == Rule::quoted_string)
+                    .map(|p| unquote(p.as_str()))
+                    .collect();
+                Some(WhenCondition::Generic { name, args })
+            }
             _ => {
                 // Catch-all: preserve unknown when conditions to prevent silent data loss
                 let name = inner.as_str().trim().to_string();

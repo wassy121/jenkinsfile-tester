@@ -236,6 +236,7 @@ when_condition = {
   | when_changeset
   | when_triggeredBy
   | when_equals
+  | when_generic
 }
 
 when_not        = { "not" ~ "{" ~ when_condition ~ "}" }
@@ -246,8 +247,8 @@ when_environment = { "environment" ~ "name:" ~ quoted_string ~ "," ~ "value:" ~ 
 when_expression = { "expression" ~ "{" ~ expression_body ~ "}" }
 expression_body = @{ (!("}" ~ WHITESPACE* ~ when_field) ~ !("}" ~ WHITESPACE* ~ "}") ~ !"}" ~ ANY)* }
 when_tag        = { "tag" ~ quoted_string }
-when_changeRequest = { "changeRequest" }
-when_buildingTag   = { "buildingTag" }
+when_changeRequest = { "changeRequest" ~ ("(" ~ ")")? }
+when_buildingTag   = { "buildingTag" ~ ("(" ~ ")")? }
 when_changelog  = { "changelog" ~ quoted_string }
 when_changeset  = { "changeset" ~ quoted_string }
 when_triggeredBy = { "triggeredBy" ~ quoted_string }
@@ -255,6 +256,8 @@ when_equals     = { "equals" ~ "expected:" ~ quoted_string ~ "," ~ "actual:" ~ q
 when_before_agent   = { "beforeAgent" ~ bool_literal }
 when_before_input   = { "beforeInput" ~ bool_literal }
 when_before_options = { "beforeOptions" ~ bool_literal }
+// Catch-all for plugin-contributed when conditions (e.g. isRestartedRun())
+when_generic        = { identifier ~ (("(" ~ ")") | quoted_string | "{" ~ when_condition+ ~ "}")? }
 
 // ── Post ──────────────────────────────────────────────────────────────────────
 post_decl    = { "post" ~ "{" ~ post_section* ~ "}" }
