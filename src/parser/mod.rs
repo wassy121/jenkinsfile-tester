@@ -340,7 +340,7 @@ fn build_environment(pair: Pair<Rule>) -> Vec<EnvVar> {
             let key = inner.next().map(|p| p.as_str().to_string()).unwrap_or_default();
             let value = inner.next().map(|env_val_pair| {
                 // env_val_pair.as_rule() == Rule::env_value
-                // env_value = { credentials_call | quoted_string | bare_word }
+                // env_value = { credentials_call | env_expression }
                 // Descend into the single child to distinguish the alternative.
                 if let Some(child) = env_val_pair.into_inner().next() {
                     match child.as_rule() {
@@ -352,7 +352,9 @@ fn build_environment(pair: Pair<Rule>) -> Vec<EnvVar> {
                                 .unwrap_or_default();
                             EnvValue::Credentials { id }
                         }
-                        _ => EnvValue::Literal(unquote(child.as_str())),
+                        // env_expression captures the raw text; unquote strips
+                        // outer quotes if the value is a simple quoted string.
+                        _ => EnvValue::Literal(unquote(child.as_str().trim())),
                     }
                 } else {
                     EnvValue::Literal(String::new())

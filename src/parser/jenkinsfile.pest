@@ -84,9 +84,20 @@ dockerfile_label     = { "label" ~ quoted_string }
 // ── Environment ───────────────────────────────────────────────────────────────
 environment_decl = { "environment" ~ "{" ~ env_entry* ~ "}" }
 env_entry        = { identifier ~ "=" ~ env_value }
-// NOTE: interpolated_string is omitted from env_value — quoted_string already
-// matches double-quoted strings first, making interpolated_string unreachable.
-env_value        = { credentials_call | quoted_string | bare_word }
+// env_value accepts credentials() calls explicitly (to extract the ID into a
+// typed EnvValue::Credentials), or falls back to env_expression which captures
+// arbitrary Groovy expressions like  "foo".replace("a","b")  as opaque text.
+env_value        = { credentials_call | env_expression }
+// Consume an arbitrary Groovy expression on one line.  Handles quoted strings
+// (which may contain braces/parens) and balanced parentheses for method calls.
+// The atomic rule prevents WHITESPACE/COMMENT skipping so we get raw text.
+env_expression   = @{ env_expr_token+ }
+env_expr_token   = _{
+    "'" ~ (!"'" ~ ANY)* ~ "'"                       // single-quoted string
+  | "\"" ~ (!"\"" ~ ANY)* ~ "\""                    // double-quoted string
+  | "(" ~ env_expr_token* ~ ")"                     // balanced parens
+  | !(NEWLINE | "}" | "(" | ")" | "'" | "\"") ~ ANY // anything else on the line
+}
 credentials_call = { "credentials" ~ "(" ~ quoted_string ~ ")" }
 
 // ── Options ───────────────────────────────────────────────────────────────────
@@ -167,7 +178,10 @@ step = {
 sh_step       = { "sh" ~ (triple_string | quoted_string | "(" ~ (triple_string | quoted_string) ~ ")") }
 echo_step     = { "echo" ~ (quoted_string | "(" ~ quoted_string ~ ")") }
 script_step   = { "script" ~ "{" ~ script_body ~ "}" }
-script_body   = @{ (!"}" ~ ANY)* }
+// Brace-balanced capture: matches nested { } blocks so Groovy code with
+// closures, if/else, try/catch etc. is consumed correctly.
+script_body   = @{ script_body_token* }
+script_body_token = _{ "{" ~ script_body_token* ~ "}" | (!"}" ~ !"{" ~ ANY) }
 checkout_step = { "checkout" ~ (identifier | "(" ~ identifier ~ ")") }
 
 with_credentials_step = {
