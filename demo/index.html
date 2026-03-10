@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>jenkinsfile-tester playground</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    header {
+      padding: 12px 20px;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header h1 { font-size: 1rem; font-weight: 600; color: #58a6ff; }
+    header span { font-size: 0.8rem; color: #8b949e; }
+    #status { margin-left: auto; font-size: 0.75rem; color: #8b949e; }
+    #status.ready { color: #3fb950; }
+    #status.error  { color: #f85149; }
+
+    main {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      overflow: hidden;
+    }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-right: 1px solid #30363d;
+    }
+    .panel:last-child { border-right: none; }
+
+    .panel-header {
+      padding: 8px 14px;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      font-size: 0.75rem;
+      color: #8b949e;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      flex-shrink: 0;
+    }
+
+    textarea {
+      flex: 1;
+      width: 100%;
+      background: #0d1117;
+      color: #e6edf3;
+      border: none;
+      outline: none;
+      resize: none;
+      padding: 14px;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.8rem;
+      line-height: 1.6;
+    }
+
+    .toolbar {
+      padding: 8px 10px;
+      background: #161b22;
+      border-top: 1px solid #30363d;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    button {
+      padding: 5px 12px;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      background: #21262d;
+      color: #e6edf3;
+      font-size: 0.75rem;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.1s, border-color 0.1s;
+    }
+    button:hover { background: #30363d; border-color: #58a6ff; }
+    button.primary { background: #1f6feb; border-color: #388bfd; }
+    button.primary:hover { background: #388bfd; }
+    button.warn { background: #b45309; border-color: #d97706; }
+    button.warn:hover { background: #d97706; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Plugin drawer ─────────────────────────────────────────────────────── */
+    #plugin-drawer {
+      flex-shrink: 0;
+      border-top: 1px solid #30363d;
+    }
+
+    #plugin-drawer-header {
+      padding: 6px 14px;
+      background: #161b22;
+      font-size: 0.72rem;
+      color: #8b949e;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+    #plugin-drawer-header:hover { color: #e6edf3; }
+
+    #plugin-chevron { font-size: 0.65rem; transition: transform 0.15s; }
+    #plugin-chevron.open { transform: rotate(90deg); }
+
+    #plugin-label { flex: 1; }
+
+    #plugin-reset-btn {
+      padding: 1px 8px;
+      font-size: 0.68rem;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    #plugin-drawer-body {
+      display: none;
+      background: #0d1117;
+      border-top: 1px solid #30363d;
+    }
+    #plugin-drawer-body.open { display: flex; flex-direction: column; }
+
+    #plugin-list {
+      overflow-y: auto;
+      max-height: 220px;
+      padding: 6px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .plugin-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.72rem;
+      color: #8b949e;
+    }
+    .plugin-row input[type="checkbox"] { accent-color: #58a6ff; cursor: pointer; }
+    .plugin-row label { cursor: pointer; flex: 1; }
+    .plugin-row label span.plugin-version { color: #484f58; margin-left: 4px; }
+
+    .plugin-expand-btn {
+      background: none;
+      border: none;
+      padding: 0 2px;
+      font-size: 0.6rem;
+      color: #484f58;
+      cursor: pointer;
+      line-height: 1;
+      border-radius: 3px;
+      transition: color 0.1s;
+    }
+    .plugin-expand-btn:hover { color: #8b949e; background: none; border-color: transparent; }
+
+    .plugin-capabilities {
+      display: none;
+      flex-direction: column;
+      gap: 4px;
+      padding: 6px 8px 6px 22px;
+      background: #0d1117;
+      border-left: 2px solid #21262d;
+      margin-left: 18px;
+      margin-bottom: 4px;
+    }
+    .plugin-capabilities.open { display: flex; }
+
+    .cap-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      flex-wrap: wrap;
+      min-height: 22px;
+    }
+
+    .cap-label {
+      font-size: 0.65rem;
+      color: #484f58;
+      width: 80px;
+      flex-shrink: 0;
+      padding-top: 3px;
+    }
+
+    .cap-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+      align-items: center;
+      flex: 1;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 1px 6px;
+      font-size: 0.65rem;
+      color: #8b949e;
+    }
+
+    .chip-remove {
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: 0.65rem;
+      color: #484f58;
+      cursor: pointer;
+      line-height: 1;
+      margin-left: 1px;
+    }
+    .chip-remove:hover { color: #f85149; background: none; border-color: transparent; }
+
+    .cap-input {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      color: #e6edf3;
+      padding: 1px 6px;
+      font-size: 0.65rem;
+      font-family: inherit;
+      width: 110px;
+    }
+    .cap-input:focus { outline: none; border-color: #58a6ff; }
+
+    .cap-add-btn {
+      padding: 1px 6px;
+      font-size: 0.65rem;
+      border-radius: 4px;
+    }
+
+
+    /* ── Custom plugin add row ─────────────────────────────────────────────── */
+    #plugin-add-row { display: flex; gap: 6px; padding: 6px 14px; border-top: 1px solid #30363d; }
+    #plugin-add-row input {
+      background: #21262d; border: 1px solid #30363d; border-radius: 4px;
+      color: #e6edf3; padding: 3px 8px; font-size: 0.72rem; font-family: inherit;
+    }
+    #plugin-add-row input:focus { outline: none; border-color: #58a6ff; }
+    #plugin-add-id  { flex: 2; }
+    #plugin-add-ver { flex: 1; }
+
+    .plugin-row .badge-custom {
+      font-size: 0.6rem; padding: 1px 5px; background: #1a3a4a; color: #58a6ff;
+      border-radius: 4px; margin-left: 4px;
+    }
+
+    /* ── Output panel ──────────────────────────────────────────────────────── */
+    #output-panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #output-header {
+      padding: 8px 14px;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      font-size: 0.75rem;
+      color: #8b949e;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #output-label { flex: 1; }
+    #copy-btn { padding: 2px 8px; font-size: 0.7rem; }
+
+    #output {
+      flex: 1;
+      overflow: auto;
+      padding: 14px;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.78rem;
+      line-height: 1.6;
+      white-space: pre;
+    }
+
+    .json-key    { color: #79c0ff; }
+    .json-string { color: #a5d6ff; }
+    .json-number { color: #f2cc60; }
+    .json-bool   { color: #ff7b72; }
+    .json-null   { color: #8b949e; }
+
+    .badge {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 10px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .badge-ok      { background: #1a4731; color: #3fb950; }
+    .badge-fail    { background: #4d1919; color: #f85149; }
+    .badge-warn    { background: #3d2b00; color: #e3b341; }
+    .badge-neutral { background: #21262d; color: #8b949e; }
+
+    #summary-bar {
+      padding: 6px 14px;
+      background: #161b22;
+      border-top: 1px solid #30363d;
+      font-size: 0.72rem;
+      color: #8b949e;
+      flex-shrink: 0;
+      min-height: 28px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>jenkinsfile-tester</h1>
+  <span>Jenkinsfile parser &amp; validator — WASM playground</span>
+  <span id="status">Loading WASM…</span>
+</header>
+
+<main>
+  <!-- Input panel -->
+  <div class="panel">
+    <div class="panel-header">Jenkinsfile</div>
+    <textarea id="input" spellcheck="false">pipeline {
+    agent any
+
+    options {
+        timeout(time: 1, unit: 'HOURS')
+        timestamps()
+    }
+
+    parameters {
+        string(name: 'BRANCH', defaultValue: 'main', description: 'Branch to build')
+        choice(name: 'ENV', choices: ['dev', 'staging', 'prod'], description: 'Target environment')
+    }
+
+    environment {
+        DEPLOY_KEY = credentials('deploy-ssh-key')
+        APP_VERSION = '1.0.0'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                echo "Building branch: ${BRANCH}"
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'make build'
+            }
+        }
+
+        stage('Test') {
+            parallel {
+                stage('Unit') {
+                    steps { sh 'make test-unit' }
+                }
+                stage('Integration') {
+                    steps { sh 'make test-integration' }
+                }
+            }
+        }
+
+        stage('Deploy') {
+            when { branch 'main' }
+            steps {
+                sh 'make deploy'
+            }
+        }
+    }
+
+    post {
+        always   { echo 'Pipeline complete' }
+        failure  { echo 'Build failed!' }
+        success  { echo 'Build succeeded!' }
+    }
+}
+</textarea>
+
+    <!-- Plugin drawer -->
+    <div id="plugin-drawer">
+      <div id="plugin-drawer-header" onclick="togglePluginDrawer()">
+        <span id="plugin-chevron">&#9654;</span>
+        <span id="plugin-label">Plugins</span>
+        <span id="plugin-count-badge"></span>
+        <button id="plugin-reset-btn" onclick="event.stopPropagation(); resetPlugins()" disabled>Reset</button>
+      </div>
+      <div id="plugin-drawer-body">
+        <div id="plugin-list"></div>
+        <div id="plugin-add-row">
+          <input id="plugin-add-id"  type="text" placeholder="plugin-id"  class="plugin-add-id" />
+          <input id="plugin-add-ver" type="text" placeholder="version"    class="plugin-add-ver" />
+          <button onclick="addCustomPlugin()">Add</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <button class="primary" onclick="run('validate')" id="btn-validate">Validate</button>
+      <button class="warn"    onclick="run('validate_strict')" id="btn-strict">Validate Strict</button>
+      <button onclick="run('parse_jenkinsfile')"  id="btn-parse">Parse AST</button>
+      <button onclick="run('run_tests')"          id="btn-tests">Run Tests</button>
+      <button onclick="run('get_pipeline_summary')" id="btn-summary">Summary</button>
+      <button onclick="run('get_stage_names')"    id="btn-stages">Stage Names</button>
+      <button onclick="run('get_unknown_keywords')" id="btn-unknown">Unknown Keywords</button>
+    </div>
+  </div>
+
+  <!-- Output panel -->
+  <div id="output-panel" class="panel">
+    <div id="output-header">
+      <span id="output-label">Output</span>
+      <button id="copy-btn" onclick="copyOutput()">Copy</button>
+    </div>
+    <div id="output">Run a command to see output here.</div>
+    <div id="summary-bar"></div>
+  </div>
+</main>
+
+<script type="module">
+  import init, {
+    parse_jenkinsfile,
+    validate,
+    validate_strict,
+    validate_with_registry,
+    validate_with_exact_registry,
+    validate_strict_with_exact_registry,
+    run_tests,
+    get_ast_json,
+    get_stage_names,
+    get_unknown_keywords,
+    get_pipeline_summary,
+    get_builtin_registry,
+    get_validation_rules,
+    init_registry,
+  } from '../pkg/jenkinsfile_tester.js';
+
+  const statusEl  = document.getElementById('status');
+  const outputEl  = document.getElementById('output');
+  const labelEl   = document.getElementById('output-label');
+  const summaryEl = document.getElementById('summary-bar');
+  const inputEl   = document.getElementById('input');
+
+  const API = {
+    parse_jenkinsfile,
+    validate,
+    validate_strict,
+    run_tests,
+    get_stage_names,
+    get_unknown_keywords,
+    get_pipeline_summary,
+    get_ast_json,
+  };
+
+  // ── Plugin state ─────────────────────────────────────────────────────────────
+  // Map of plugin_id → { entry: PluginEntry, enabled: boolean }
+  const pluginState = new Map();
+  let builtinTotal = 0;
+
+  // ── Initialise WASM ─────────────────────────────────────────────────────────
+  try {
+    await init();
+    statusEl.textContent = 'WASM ready';
+    statusEl.className = 'ready';
+    document.querySelectorAll('button[id^="btn-"]').forEach(b => b.disabled = false);
+
+    // Populate plugin state from builtin registry
+    initPluginDrawer();
+
+    // Auto-run validate on load
+    window.run('validate');
+  } catch (e) {
+    statusEl.textContent = 'WASM load failed: ' + e.message;
+    statusEl.className = 'error';
+  }
+
+  // ── Plugin drawer ────────────────────────────────────────────────────────────
+  function initPluginDrawer() {
+    const raw = get_builtin_registry();
+    let registry;
+    try { registry = JSON.parse(raw); } catch { return; }
+
+    const plugins = registry.plugins || [];
+    builtinTotal = plugins.length;
+
+    for (const entry of plugins) {
+      pluginState.set(entry.plugin_id, { entry, enabled: true, custom: false });
+    }
+
+    // Restore saved plugin state from localStorage (UI-002)
+    const saved = localStorage.getItem('jenkinsfile-tester:plugins');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        const enabledIds = new Set(parsed.enabled || parsed);  // support both array and {enabled:[]}
+        for (const [id, state] of pluginState) {
+          state.enabled = enabledIds.has(id);
+        }
+        // Restore any saved custom plugins
+        const customPlugins = parsed.custom || [];
+        for (const cp of customPlugins) {
+          if (!pluginState.has(cp.id)) {
+            pluginState.set(cp.id, {
+              entry: { plugin_id: cp.id, version: cp.version, contributes: { steps: [], agent_types: [], options: [], triggers: [], tools: [], when_conditions: [] } },
+              enabled: enabledIds.has(cp.id),
+              custom: true,
+            });
+          }
+        }
+      } catch { /* ignore corrupt storage */ }
+    }
+
+    renderPluginList();
+    updatePluginBadge();
+  }
+
+  function savePluginState() {
+    const enabledIds = [...pluginState.entries()]
+      .filter(([, s]) => s.enabled)
+      .map(([id]) => id);
+    const customPlugins = [...pluginState.entries()]
+      .filter(([, s]) => s.custom)
+      .map(([id, s]) => ({ id, version: s.entry.version }));
+    localStorage.setItem('jenkinsfile-tester:plugins', JSON.stringify({ enabled: enabledIds, custom: customPlugins }));
+  }
+
+  function renderPluginList() {
+    const listEl = document.getElementById('plugin-list');
+    listEl.innerHTML = '';
+
+    for (const [id, state] of pluginState) {
+      // Plugin header row
+      const row = document.createElement('div');
+      row.className = 'plugin-row';
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.id = 'plugin-cb-' + id;
+      cb.checked = state.enabled;
+      cb.addEventListener('change', () => {
+        pluginState.get(id).enabled = cb.checked;
+        updatePluginBadge();
+      });
+
+      const lbl = document.createElement('label');
+      lbl.htmlFor = cb.id;
+      const customBadge = state.custom ? '<span class="badge-custom">[custom]</span>' : '';
+      lbl.innerHTML = esc(id) + '<span class="plugin-version">v' + esc(state.entry.version) + '</span>' + customBadge;
+
+      const expandBtn = document.createElement('button');
+      expandBtn.className = 'plugin-expand-btn';
+      expandBtn.textContent = '▶';
+      expandBtn.title = 'Edit capabilities';
+
+      row.appendChild(cb);
+      row.appendChild(lbl);
+      row.appendChild(expandBtn);
+      listEl.appendChild(row);
+
+      // Capability editor (hidden by default)
+      const capSection = document.createElement('div');
+      capSection.className = 'plugin-capabilities';
+      listEl.appendChild(capSection);
+
+      expandBtn.addEventListener('click', () => {
+        const isOpen = capSection.classList.toggle('open');
+        expandBtn.textContent = isOpen ? '▼' : '▶';
+        if (isOpen) renderCapabilities(id, capSection);
+      });
+    }
+  }
+
+  // Capability categories (omit when_conditions per spec)
+  const CAP_CATEGORIES = [
+    { key: 'steps',       label: 'Steps' },
+    { key: 'agent_types', label: 'Agent types' },
+    { key: 'options',     label: 'Options' },
+    { key: 'triggers',    label: 'Triggers' },
+    { key: 'tools',       label: 'Tools' },
+  ];
+
+  function chipText(item) {
+    // steps items may be objects { name, args } or plain strings
+    return (item && typeof item === 'object') ? item.name : String(item);
+  }
+
+  function renderCapabilities(id, container) {
+    container.innerHTML = '';
+    const contributes = pluginState.get(id).entry.contributes;
+
+    for (const { key, label } of CAP_CATEGORIES) {
+      const items = contributes[key] || [];
+      const capRow = document.createElement('div');
+      capRow.className = 'cap-row';
+
+      const capLbl = document.createElement('span');
+      capLbl.className = 'cap-label';
+      capLbl.textContent = label;
+
+      const chipsEl = document.createElement('div');
+      chipsEl.className = 'cap-chips';
+
+      const rebuildChips = () => {
+        chipsEl.innerHTML = '';
+        const currentItems = contributes[key] || [];
+        currentItems.forEach((item, idx) => {
+          const chip = document.createElement('span');
+          chip.className = 'chip';
+          const textNode = document.createTextNode(chipText(item));
+          const removeBtn = document.createElement('button');
+          removeBtn.className = 'chip-remove';
+          removeBtn.textContent = '×';
+          removeBtn.title = 'Remove';
+          removeBtn.addEventListener('click', () => {
+            contributes[key].splice(idx, 1);
+            rebuildChips();
+          });
+          chip.appendChild(textNode);
+          chip.appendChild(removeBtn);
+          chipsEl.appendChild(chip);
+        });
+
+        // Add input + button after chips
+        const input = document.createElement('input');
+        input.className = 'cap-input';
+        input.placeholder = key === 'steps' ? 'step-name' : 'value';
+        input.type = 'text';
+
+        const addBtn = document.createElement('button');
+        addBtn.className = 'cap-add-btn';
+        addBtn.textContent = '+';
+
+        const doAdd = () => {
+          const val = input.value.trim();
+          if (!val) return;
+          if (!contributes[key]) contributes[key] = [];
+          // steps get object form; all others are plain strings
+          contributes[key].push(key === 'steps' ? { name: val } : val);
+          input.value = '';
+          rebuildChips();
+        };
+
+        addBtn.addEventListener('click', doAdd);
+        input.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
+
+        chipsEl.appendChild(input);
+        chipsEl.appendChild(addBtn);
+      };
+
+      rebuildChips();
+
+      capRow.appendChild(capLbl);
+      capRow.appendChild(chipsEl);
+      container.appendChild(capRow);
+    }
+  }
+
+  function updatePluginBadge() {
+    const activeCount = [...pluginState.values()].filter(s => s.enabled).length;
+    const total = pluginState.size;
+    const badgeEl = document.getElementById('plugin-count-badge');
+    const resetBtn = document.getElementById('plugin-reset-btn');
+
+    if (activeCount === total) {
+      badgeEl.textContent = '(' + total + ' plugins)';
+      resetBtn.disabled = true;
+    } else {
+      badgeEl.textContent = '(' + activeCount + ' / ' + total + ' active)';
+      resetBtn.disabled = false;
+    }
+  }
+
+  window.togglePluginDrawer = function() {
+    const chevron = document.getElementById('plugin-chevron');
+    const body    = document.getElementById('plugin-drawer-body');
+    const isOpen  = body.classList.toggle('open');
+    chevron.classList.toggle('open', isOpen);
+  };
+
+  window.resetPlugins = function() {
+    for (const state of pluginState.values()) {
+      state.enabled = true;
+    }
+    // Re-render checkboxes
+    for (const [id] of pluginState) {
+      const cb = document.getElementById('plugin-cb-' + id);
+      if (cb) cb.checked = true;
+    }
+    updatePluginBadge();
+    savePluginState();
+  };
+
+  // ── Custom plugin add (UI-001) ───────────────────────────────────────────────
+  window.addCustomPlugin = function() {
+    const id  = document.getElementById('plugin-add-id').value.trim();
+    const ver = document.getElementById('plugin-add-ver').value.trim() || '0.0.0';
+    if (!id) return;
+    pluginState.set(id, {
+      entry: { plugin_id: id, version: ver, contributes: { steps: [], agent_types: [], options: [], triggers: [], tools: [], when_conditions: [] } },
+      enabled: true,
+      custom: true,
+    });
+    renderPluginList();
+    updatePluginBadge();
+    savePluginState();
+    document.getElementById('plugin-add-id').value  = '';
+    document.getElementById('plugin-add-ver').value = '';
+  };
+
+  // ── Run a named API function ─────────────────────────────────────────────────
+  window.run = function(fnName) {
+    const src = inputEl.value;
+    let raw;
+    try {
+      // validate and validate_strict always use the current pluginState so that
+      // capability edits and enabled/disabled toggles are reflected immediately.
+      if (fnName === 'validate' || fnName === 'validate_strict') {
+        const activePlugins = [...pluginState.values()]
+          .filter(s => s.enabled)
+          .map(s => s.entry);
+        const registryJson = JSON.stringify({ plugins: activePlugins });
+        raw = fnName === 'validate_strict'
+          ? validate_strict_with_exact_registry(src, registryJson)
+          : validate_with_exact_registry(src, registryJson);
+        // Label shows active plugin count so the user knows plugin state was applied
+        const n = activePlugins.length;
+        labelEl.textContent = fnName + '() [' + n + ' plugin' + (n !== 1 ? 's' : '') + ']';
+      } else {
+        raw = API[fnName](src);
+        labelEl.textContent = fnName + '()';
+      }
+    } catch (e) {
+      outputEl.textContent = 'Runtime error: ' + e.message;
+      return;
+    }
+
+    let parsed;
+    try { parsed = JSON.parse(raw); } catch { parsed = raw; }
+
+    outputEl.innerHTML = highlight(JSON.stringify(parsed, null, 2));
+    renderSummary(fnName, parsed);
+  };
+
+  window.copyOutput = function() {
+    navigator.clipboard.writeText(outputEl.textContent);
+  };
+
+  // ── Render summary bar ──────────────────────────────────────────────────────
+  function renderSummary(fn, data) {
+    let html = '';
+
+    if (fn === 'validate' || fn === 'validate_strict') {
+      const valid    = data.is_valid;
+      const errors   = (data.errors   || []).length;
+      const warnings = (data.warnings || []).length;
+      const suggestions = (data.suggestions || []).length;
+      html = badge(valid ? 'VALID' : 'INVALID', valid ? 'badge-ok' : 'badge-fail')
+           + ` &nbsp; ${errors} error${errors !== 1 ? 's' : ''}`
+           + ` &nbsp; ${warnings} warning${warnings !== 1 ? 's' : ''}`
+           + ` &nbsp; ${suggestions} suggestion${suggestions !== 1 ? 's' : ''}`;
+    } else if (fn === 'parse_jenkinsfile') {
+      const ok = data.success;
+      html = badge(ok ? 'PARSED' : 'ERROR', ok ? 'badge-ok' : 'badge-fail');
+      if (!ok && data.error) html += ` &nbsp; ${esc(data.error.message)} (line ${data.error.line}, col ${data.error.col})`;
+    } else if (fn === 'run_tests') {
+      const p = data.passed || 0, f = data.failed || 0, s = data.skipped || 0;
+      html = badge(f === 0 ? 'PASS' : 'FAIL', f === 0 ? 'badge-ok' : 'badge-fail')
+           + ` &nbsp; ${p} passed &nbsp; ${f} failed &nbsp; ${s} skipped`;
+    } else if (fn === 'get_pipeline_summary') {
+      if (data.success) {
+        html = badge('OK', 'badge-ok')
+             + ` &nbsp; ${data.stage_count} stage${data.stage_count !== 1 ? 's' : ''}`
+             + ` &nbsp; agent: ${data.agent_type}`
+             + ` &nbsp; ${data.parameter_count} param${data.parameter_count !== 1 ? 's' : ''}`;
+      } else {
+        html = badge('PARSE ERROR', 'badge-fail');
+      }
+    } else if (fn === 'get_stage_names') {
+      const names = Array.isArray(data) ? data : [];
+      html = badge(names.length + ' stage' + (names.length !== 1 ? 's' : ''), 'badge-neutral');
+    } else if (fn === 'get_unknown_keywords') {
+      const kws = Array.isArray(data) ? data : [];
+      html = kws.length === 0
+        ? badge('ALL KNOWN', 'badge-ok')
+        : badge(kws.length + ' unknown', 'badge-warn') + ' &nbsp; ' + kws.map(k => esc(k)).join(', ');
+    }
+
+    summaryEl.innerHTML = html;
+  }
+
+  function badge(text, cls) {
+    return `<span class="badge ${cls}">${esc(text)}</span>`;
+  }
+
+  // ── JSON syntax highlighter ─────────────────────────────────────────────────
+  function highlight(json) {
+    return esc(json).replace(
+      /("(\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+      match => {
+        if (/^"/.test(match)) {
+          return /:$/.test(match)
+            ? `<span class="json-key">${match}</span>`
+            : `<span class="json-string">${match}</span>`;
+        }
+        if (/true|false/.test(match)) return `<span class="json-bool">${match}</span>`;
+        if (/null/.test(match))        return `<span class="json-null">${match}</span>`;
+        return `<span class="json-number">${match}</span>`;
+      }
+    );
+  }
+
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+</script>
+</body>
+</html>

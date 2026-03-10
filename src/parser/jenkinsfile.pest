@@ -1,0 +1,270 @@
+// Jenkinsfile Declarative Pipeline Grammar
+// Silent rules — auto-consumed everywhere
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+COMMENT    = _{ "//" ~ (!"\n" ~ ANY)* | "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
+
+// ── Top-level ────────────────────────────────────────────────────────────────
+pipeline = { SOI ~ "pipeline" ~ "{" ~ pipeline_body ~ "}" ~ EOI }
+
+pipeline_body = {
+    pipeline_section* ~ stages_decl ~ pipeline_section*
+}
+
+pipeline_section = {
+    agent_decl
+  | environment_decl
+  | options_decl
+  | parameters_decl
+  | triggers_decl
+  | tools_decl
+  | post_decl
+  | libraries_decl
+}
+
+// ── Agent ─────────────────────────────────────────────────────────────────────
+agent_decl = { "agent" ~ agent_spec }
+
+agent_spec = {
+    agent_any
+  | agent_none
+  | agent_label_shorthand
+  | agent_block
+}
+
+agent_any            = { "any" }
+agent_none           = { "none" }
+agent_label_shorthand = { quoted_string }
+agent_block          = { "{" ~ agent_block_entry* ~ "}" }
+agent_block_entry    = { agent_label_entry | agent_docker_entry | agent_dockerfile_entry | agent_node_entry | agent_kubernetes_entry | agent_generic_entry }
+agent_label_entry    = { "label" ~ quoted_string }
+agent_docker_entry   = { "docker" ~ "{" ~ docker_field* ~ "}" }
+docker_field         = { docker_image | docker_args | docker_registryUrl | docker_registryCredentialsId | docker_reuseNode | docker_alwaysPull | docker_customWorkspace }
+docker_image         = { "image" ~ quoted_string }
+docker_args          = { "args" ~ quoted_string }
+docker_registryUrl   = { "registryUrl" ~ quoted_string }
+docker_registryCredentialsId = { "registryCredentialsId" ~ quoted_string }
+docker_reuseNode     = { "reuseNode" ~ bool_literal }
+docker_alwaysPull    = { "alwaysPull" ~ bool_literal }
+docker_customWorkspace = { "customWorkspace" ~ quoted_string }
+agent_dockerfile_entry = { "dockerfile" ~ "{" ~ dockerfile_field* ~ "}" }
+agent_node_entry     = { "node" ~ "{" ~ node_field* ~ "}" }
+node_field           = { node_label | node_customWorkspace }
+node_label           = { "label" ~ quoted_string }
+node_customWorkspace = { "customWorkspace" ~ quoted_string }
+// Kubernetes agent block with typed sub-fields
+agent_kubernetes_entry = { "kubernetes" ~ "{" ~ kubernetes_field* ~ "}" }
+kubernetes_field       = {
+    kubernetes_yaml
+  | kubernetes_yamlFile
+  | kubernetes_cloud
+  | kubernetes_namespace
+  | kubernetes_defaultContainer
+  | kubernetes_inheritFrom
+  | kubernetes_retries
+  | kubernetes_label
+}
+kubernetes_yaml             = { "yaml" ~ (triple_string | quoted_string) }
+kubernetes_yamlFile         = { "yamlFile" ~ quoted_string }
+kubernetes_cloud            = { "cloud" ~ quoted_string }
+kubernetes_namespace        = { "namespace" ~ quoted_string }
+kubernetes_defaultContainer = { "defaultContainer" ~ quoted_string }
+kubernetes_inheritFrom      = { "inheritFrom" ~ quoted_string }
+kubernetes_retries          = { "retries" ~ integer }
+kubernetes_label            = { "label" ~ quoted_string }
+// Catch-all for plugin-registered agent types (e.g. kubernetes { ... })
+agent_generic_entry  = { identifier ~ agent_generic_body }
+agent_generic_body   = { "{" ~ agent_generic_content* ~ "}" }
+agent_generic_content = { agent_generic_body | (!("{" | "}") ~ ANY) }
+dockerfile_field     = { dockerfile_filename | dockerfile_dir | dockerfile_additionalBuildArgs | dockerfile_label }
+dockerfile_filename  = { "filename" ~ quoted_string }
+dockerfile_dir       = { "dir" ~ quoted_string }
+dockerfile_additionalBuildArgs = { "additionalBuildArgs" ~ quoted_string }
+dockerfile_label     = { "label" ~ quoted_string }
+
+// ── Environment ───────────────────────────────────────────────────────────────
+environment_decl = { "environment" ~ "{" ~ env_entry* ~ "}" }
+env_entry        = { identifier ~ "=" ~ env_value }
+// NOTE: interpolated_string is omitted from env_value — quoted_string already
+// matches double-quoted strings first, making interpolated_string unreachable.
+env_value        = { credentials_call | quoted_string | bare_word }
+credentials_call = { "credentials" ~ "(" ~ quoted_string ~ ")" }
+
+// ── Options ───────────────────────────────────────────────────────────────────
+options_decl = { "options" ~ "{" ~ option_entry* ~ "}" }
+option_entry = { identifier ~ "(" ~ option_args? ~ ")" }
+option_args  = { option_arg ~ ("," ~ option_arg)* }
+option_arg   = { (identifier ~ ":")? ~ (call_expr | value) }
+
+// Nested function call expression (e.g. logRotator(numToKeepStr: '10'))
+call_expr      = { identifier ~ "(" ~ call_arg_list? ~ ")" }
+call_arg_list  = { call_arg ~ ("," ~ call_arg)* }
+call_arg       = { (identifier ~ ":")? ~ (call_expr | value) }
+
+// ── Parameters ────────────────────────────────────────────────────────────────
+parameters_decl = { "parameters" ~ "{" ~ param_entry* ~ "}" }
+param_entry     = { identifier ~ "(" ~ param_args? ~ ")" }
+param_args      = { param_arg ~ ("," ~ param_arg)* }
+// List literal — used in parameter arguments, e.g. choices: ['a', 'b', 'c']
+list_literal    = { "[" ~ (value ~ ("," ~ value)* ~ ","?)? ~ "]" }
+param_arg       = { identifier ~ ":" ~ (list_literal | value) }
+
+// ── Triggers ──────────────────────────────────────────────────────────────────
+triggers_decl = { "triggers" ~ "{" ~ trigger_entry* ~ "}" }
+trigger_entry = { identifier ~ "(" ~ trigger_args? ~ ")" }
+trigger_args  = { trigger_arg ~ ("," ~ trigger_arg)* }
+trigger_arg   = { (identifier ~ ":")? ~ value }
+
+// ── Tools ─────────────────────────────────────────────────────────────────────
+tools_decl = { "tools" ~ "{" ~ tool_entry* ~ "}" }
+tool_entry = { identifier ~ quoted_string }
+
+// ── Stages ────────────────────────────────────────────────────────────────────
+stages_decl = { "stages" ~ "{" ~ stage* ~ "}" }
+
+stage = { "stage" ~ "(" ~ quoted_string ~ ")" ~ "{" ~ stage_body ~ "}" }
+
+stage_body = {
+    stage_section* ~ (steps_decl | parallel_decl | matrix_decl | stages_decl) ~ stage_section*
+}
+
+stage_section = {
+    agent_decl
+  | environment_decl
+  | when_decl
+  | options_decl
+  | tools_decl
+  | post_decl
+  | input_decl
+  | fail_fast_decl
+}
+
+// ── failFast ──────────────────────────────────────────────────────────────────
+fail_fast_decl = { "failFast" ~ bool_literal }
+
+// ── Stage input directive ──────────────────────────────────────────────────
+input_decl         = { "input" ~ "{" ~ input_field* ~ "}" }
+input_field        = { input_message | input_ok | input_submitter_param | input_submitter | parameters_decl }
+input_message      = { "message" ~ string_value }
+input_ok           = { "ok" ~ string_value }
+input_submitter    = { "submitter" ~ string_value }
+input_submitter_param = { "submitterParameter" ~ string_value }
+string_value       = { quoted_string | bare_word }
+
+// ── Steps ─────────────────────────────────────────────────────────────────────
+steps_decl = { "steps" ~ "{" ~ step* ~ "}" }
+
+step = {
+    sh_step
+  | echo_step
+  | script_step
+  | checkout_step
+  | with_credentials_step
+  | retry_step
+  | timeout_step
+  | command_call
+}
+
+sh_step       = { "sh" ~ (triple_string | quoted_string | "(" ~ (triple_string | quoted_string) ~ ")") }
+echo_step     = { "echo" ~ (quoted_string | "(" ~ quoted_string ~ ")") }
+script_step   = { "script" ~ "{" ~ script_body ~ "}" }
+script_body   = @{ (!"}" ~ ANY)* }
+checkout_step = { "checkout" ~ (identifier | "(" ~ identifier ~ ")") }
+
+with_credentials_step = {
+    "withCredentials" ~ "(" ~ "[" ~ binding_list? ~ "]" ~ ")" ~ "{" ~ step* ~ "}"
+}
+binding_list = { binding ~ ("," ~ binding)* }
+binding      = { identifier ~ "(" ~ binding_args ~ ")" }
+binding_args = { binding_arg ~ ("," ~ binding_arg)* }
+binding_arg  = { identifier ~ ":" ~ quoted_string }
+
+retry_step   = { "retry" ~ "(" ~ integer ~ ")" ~ "{" ~ step* ~ "}" }
+timeout_step = {
+    "timeout" ~ "(" ~ timeout_args ~ ")" ~ "{" ~ step* ~ "}"
+}
+timeout_args = { timeout_arg ~ ("," ~ timeout_arg)* }
+timeout_arg  = { (identifier ~ ":") ? ~ value }
+
+command_call = { identifier ~ named_args? }
+named_args   = { "(" ~ (named_arg ~ ("," ~ named_arg)*)? ~ ")" }
+named_arg    = { (identifier ~ ":") ? ~ value }
+
+// ── Parallel ──────────────────────────────────────────────────────────────────
+parallel_decl = { "parallel" ~ "{" ~ stage* ~ "}" }
+
+// ── Matrix ────────────────────────────────────────────────────────────────────
+matrix_decl        = { "matrix" ~ "{" ~ matrix_section* ~ "}" }
+matrix_section     = { matrix_axes | matrix_excludes | stages_decl }
+
+matrix_axes        = { "axes" ~ "{" ~ matrix_axis_entry* ~ "}" }
+matrix_axis_entry  = { "axis" ~ "{" ~ axis_field* ~ "}" }
+axis_field         = { axis_name | axis_values }
+axis_name          = { "name" ~ string_value }
+axis_values        = { "values" ~ string_value ~ ("," ~ string_value)* }
+
+matrix_excludes       = { "excludes" ~ "{" ~ matrix_exclude_entry* ~ "}" }
+matrix_exclude_entry  = { "exclude" ~ "{" ~ matrix_axis_entry* ~ "}" }
+
+// ── When ──────────────────────────────────────────────────────────────────────
+when_decl      = { "when" ~ "{" ~ when_field* ~ "}" }
+when_field     = { when_before_agent | when_before_input | when_before_options | when_condition }
+when_condition = {
+    when_not
+  | when_allOf
+  | when_anyOf
+  | when_branch
+  | when_environment
+  | when_expression
+  | when_tag
+  | when_changeRequest
+  | when_buildingTag
+  | when_changelog
+  | when_changeset
+  | when_triggeredBy
+  | when_equals
+}
+
+when_not        = { "not" ~ "{" ~ when_condition ~ "}" }
+when_allOf      = { "allOf" ~ "{" ~ when_condition+ ~ "}" }
+when_anyOf      = { "anyOf" ~ "{" ~ when_condition+ ~ "}" }
+when_branch     = { "branch" ~ quoted_string }
+when_environment = { "environment" ~ "name:" ~ quoted_string ~ "," ~ "value:" ~ quoted_string }
+when_expression = { "expression" ~ "{" ~ expression_body ~ "}" }
+expression_body = @{ (!("}" ~ WHITESPACE* ~ when_field) ~ !("}" ~ WHITESPACE* ~ "}") ~ !"}" ~ ANY)* }
+when_tag        = { "tag" ~ quoted_string }
+when_changeRequest = { "changeRequest" }
+when_buildingTag   = { "buildingTag" }
+when_changelog  = { "changelog" ~ quoted_string }
+when_changeset  = { "changeset" ~ quoted_string }
+when_triggeredBy = { "triggeredBy" ~ quoted_string }
+when_equals     = { "equals" ~ "expected:" ~ quoted_string ~ "," ~ "actual:" ~ quoted_string }
+when_before_agent   = { "beforeAgent" ~ bool_literal }
+when_before_input   = { "beforeInput" ~ bool_literal }
+when_before_options = { "beforeOptions" ~ bool_literal }
+
+// ── Post ──────────────────────────────────────────────────────────────────────
+post_decl    = { "post" ~ "{" ~ post_section* ~ "}" }
+post_section = { post_condition ~ "{" ~ step* ~ "}" }
+post_condition = {
+    "always" | "success" | "unsuccessful" | "failure" | "unstable" | "aborted"
+  | "changed" | "cleanup" | "regression" | "fixed"
+}
+
+// ── Libraries ─────────────────────────────────────────────────────────────────
+libraries_decl = { "libraries" ~ "{" ~ lib_entry* ~ "}" }
+lib_entry      = { "lib" ~ "(" ~ quoted_string ~ ")" }
+
+// ── Values & Primitives ───────────────────────────────────────────────────────
+// NOTE: interpolated_string omitted — quoted_string already matches double-quoted
+// strings, making interpolated_string unreachable (ARC-011-TASK).
+value = { triple_string | quoted_string | bool_literal | integer | bare_word }
+
+// triple_string MUST come before double_string
+triple_string  = @{ "'''" ~ (!"'''" ~ ANY)* ~ "'''" | "\"\"\"" ~ (!"\"\"\"" ~ ANY)* ~ "\"\"\"" }
+quoted_string  = @{ "'" ~ (!"'" ~ ANY)* ~ "'" | "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
+interpolated_string = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
+
+bool_literal = { "true" | "false" }
+integer      = @{ ASCII_DIGIT+ }
+bare_word    = @{ (ASCII_ALPHANUMERIC | "_" | "-" | "." | "/" | "*" | "@" | "$" | "{" | "}")+ }
+identifier   = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
