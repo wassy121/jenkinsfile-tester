@@ -1,0 +1,7 @@
+target/
+pkg/
+docs/
+demo/
+.local/
+.git/
+*.md
