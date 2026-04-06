@@ -199,9 +199,11 @@ timeout_step = {
 timeout_args = { timeout_arg ~ ("," ~ timeout_arg)* }
 timeout_arg  = { (identifier ~ ":") ? ~ value }
 
-command_call = { identifier ~ named_args? }
+command_call = { identifier ~ (named_args | bare_args)? }
 named_args   = { "(" ~ (named_arg ~ ("," ~ named_arg)*)? ~ ")" }
+bare_args    = { bare_arg ~ ("," ~ bare_arg)* }
 named_arg    = { (identifier ~ ":") ? ~ value }
+bare_arg     = { (identifier ~ ":") ? ~ value }
 
 // ── Parallel ──────────────────────────────────────────────────────────────────
 parallel_decl = { "parallel" ~ "{" ~ stage* ~ "}" }

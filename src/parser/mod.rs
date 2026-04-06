@@ -967,7 +967,7 @@ fn build_step(pair: Pair<Rule>) -> Option<Step> {
                 let args: Vec<String> = ci.next()
                     .map(|named| {
                         named.into_inner()
-                            .filter(|p| p.as_rule() == Rule::named_arg)
+                            .filter(|p| p.as_rule() == Rule::named_arg || p.as_rule() == Rule::bare_arg)
                             .map(|arg| {
                                 let mut ai = arg.into_inner();
                                 let first = ai.next().map(|p| p.as_str().to_string()).unwrap_or_default();

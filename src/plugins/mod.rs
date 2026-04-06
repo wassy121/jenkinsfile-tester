@@ -408,6 +408,86 @@ pub static BUILTIN_REGISTRY_JSON: &str = r#"{
         "tools": [],
         "when_conditions": []
       }
+    },
+    {
+      "plugin_id": "workflow-basic-steps",
+      "version": "2.6.0",
+      "contributes": {
+        "steps": [
+          { "name": "stash" },
+          { "name": "unstash" },
+          { "name": "readFile" },
+          { "name": "writeFile" },
+          { "name": "fileExists" },
+          { "name": "dir" },
+          { "name": "pwd" },
+          { "name": "sleep" },
+          { "name": "error" },
+          { "name": "catchError" },
+          { "name": "warnError" },
+          { "name": "isUnix" },
+          { "name": "wrap" },
+          { "name": "mail" }
+        ],
+        "agent_types": [],
+        "options": [],
+        "triggers": [],
+        "tools": [],
+        "when_conditions": []
+      }
+    },
+    {
+      "plugin_id": "junit",
+      "version": "1.61",
+      "contributes": {
+        "steps": [{ "name": "junit" }],
+        "agent_types": [],
+        "options": [],
+        "triggers": [],
+        "tools": [],
+        "when_conditions": []
+      }
+    },
+    {
+      "plugin_id": "pipeline-input-step",
+      "version": "2.12",
+      "contributes": {
+        "steps": [{ "name": "input" }],
+        "agent_types": [],
+        "options": [],
+        "triggers": [],
+        "tools": [],
+        "when_conditions": []
+      }
+    },
+    {
+      "plugin_id": "pipeline-utility-steps",
+      "version": "2.16.0",
+      "contributes": {
+        "steps": [
+          { "name": "readJSON" },
+          { "name": "writeJSON" },
+          { "name": "readYaml" },
+          { "name": "writeYaml" },
+          { "name": "readProperties" },
+          { "name": "findFiles" },
+          { "name": "sha1" },
+          { "name": "sha256" },
+          { "name": "zip" },
+          { "name": "unzip" },
+          { "name": "tar" },
+          { "name": "untar" },
+          { "name": "touch" },
+          { "name": "tee" },
+          { "name": "prependToFile" },
+          { "name": "appendToFile" }
+        ],
+        "agent_types": [],
+        "options": [],
+        "triggers": [],
+        "tools": [],
+        "when_conditions": []
+      }
     }
   ]
 }"#;
@@ -574,7 +654,7 @@ mod tests {
     #[test]
     fn tgap007_builtin_registry_covers_all_expected_contributions() {
         let registry = PluginRegistry::builtin();
-        assert_eq!(registry.plugins.len(), 18, "expected 18 plugins, got: {}", registry.plugins.len());
+        assert_eq!(registry.plugins.len(), 22, "expected 22 plugins, got: {}", registry.plugins.len());
 
         // Tools coverage
         for tool in &["nodejs", "node", "go", "golang", "gradle", "maven", "ant", "git", "jdk", "java"] {

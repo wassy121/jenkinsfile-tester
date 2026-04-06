@@ -5003,6 +5003,101 @@ mod w011_groovy_interpolation {
         assert!(has_warning(&v, "W011"), "expected W011 for usernamePassword interpolation, got: {}", v);
     }
 
+    // ── Bare args (unparenthesized) ────────────────────────────────────────────
+
+    /// `stash name: 'source', includes: '**'` bare named args parse correctly.
+    #[test]
+    fn bare_args_stash_named_args_parse() {
+        let src = r#"pipeline {
+    agent any
+    stages {
+        stage('Build') {
+            steps {
+                stash name: 'source', includes: '**'
+            }
+        }
+    }
+}"#;
+        let v: serde_json::Value = serde_json::from_str(&parse_jenkinsfile(src)).unwrap();
+        assert!(v["success"].as_bool().unwrap(), "expected parse success, got: {}", v);
+    }
+
+    /// `unstash 'source'` bare positional string arg parses correctly.
+    #[test]
+    fn bare_args_unstash_positional_string_parse() {
+        let src = r#"pipeline {
+    agent any
+    stages {
+        stage('Test') {
+            steps {
+                unstash 'source'
+            }
+        }
+    }
+}"#;
+        let v: serde_json::Value = serde_json::from_str(&parse_jenkinsfile(src)).unwrap();
+        assert!(v["success"].as_bool().unwrap(), "expected parse success, got: {}", v);
+    }
+
+    /// `junit 'test-results/*.xml'` bare positional string arg parses correctly.
+    #[test]
+    fn bare_args_junit_positional_string_parse() {
+        let src = r#"pipeline {
+    agent any
+    stages {
+        stage('Test') {
+            steps {
+                junit 'test-results/*.xml'
+            }
+        }
+    }
+}"#;
+        let v: serde_json::Value = serde_json::from_str(&parse_jenkinsfile(src)).unwrap();
+        assert!(v["success"].as_bool().unwrap(), "expected parse success, got: {}", v);
+    }
+
+    /// `input message: 'Proceed?', ok: 'Deploy', submitter: 'release-team'` bare named args parse correctly.
+    #[test]
+    fn bare_args_input_multiple_named_args_parse() {
+        let src = r#"pipeline {
+    agent any
+    stages {
+        stage('Approval') {
+            steps {
+                input message: 'Proceed?', ok: 'Deploy', submitter: 'release-team'
+            }
+        }
+    }
+}"#;
+        let v: serde_json::Value = serde_json::from_str(&parse_jenkinsfile(src)).unwrap();
+        assert!(v["success"].as_bool().unwrap(), "expected parse success, got: {}", v);
+    }
+
+    /// Mix of bare and parenthesized args in same pipeline validates correctly (no parse errors).
+    #[test]
+    fn bare_args_mixed_with_parenthesized_validates() {
+        let src = r#"pipeline {
+    agent any
+    stages {
+        stage('Build') {
+            steps {
+                sh 'mvn package'
+                stash name: 'artifacts', includes: 'target/**'
+            }
+        }
+        stage('Test') {
+            steps {
+                unstash 'artifacts'
+                junit('test-results/*.xml')
+                archiveArtifacts artifacts: 'target/*.jar'
+            }
+        }
+    }
+}"#;
+        let v = validate_json(src);
+        assert!(v["is_valid"].as_bool().unwrap_or(false), "expected valid pipeline, got: {}", v);
+    }
+
     /// run_tests() no_groovy_interpolated_credentials assertion fails for double-quoted interpolation.
     #[test]
     fn w011_tester_assertion_fires() {
