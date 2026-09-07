@@ -156,16 +156,17 @@ pub struct Location {
 
 ### Builtin registry
 
-18 plugins are embedded as a JSON literal compiled into the binary. The registry is parsed once at first use via `std::sync::OnceLock` and then shared as `Arc<PluginRegistry>`:
+18 plugins are embedded as a JSON literal compiled into the binary. The registry is parsed once at first use via `std::sync::LazyLock` and then shared as `Arc<PluginRegistry>`:
 
 ```rust
 pub fn builtin_arc() -> Arc<PluginRegistry> {
-    static REGISTRY: OnceLock<Arc<PluginRegistry>> = OnceLock::new();
-    REGISTRY.get_or_init(|| Arc::new(from_json(BUILTIN_JSON).unwrap())).clone()
+    static REGISTRY: LazyLock<Arc<PluginRegistry>> =
+        LazyLock::new(|| Arc::new(from_json(BUILTIN_JSON).unwrap()));
+    Arc::clone(&REGISTRY)
 }
 ```
 
-`OnceLock` is used instead of `LazyLock` because `LazyLock` requires Rust 1.80+.
+`LazyLock` (stabilised in Rust 1.80) replaces the earlier `OnceLock` + `get_or_init` pattern.
 
 ### Thread-local state
 
@@ -285,9 +286,7 @@ Non-breaking changes include:
 
 | Constraint | Reason |
 |---|---|
-| Rust 1.73.0 | System Rust on the WSL development environment |
-| `pest = "=2.7.15"` | Pinned; newer versions require rustc ≥ 1.83 |
-| No `std::sync::LazyLock` | Requires Rust 1.80+; use `OnceLock` instead |
+| Rust ≥ 1.80 | Required for `std::sync::LazyLock` used by the builtin registry |
 | No new `Cargo.toml` dependencies | Binary size and compilation time — every dep adds to the WASM bundle |
 | `./test.sh`, not bare `cargo test` | WSL + `/mnt/c/` filesystem caching; the script clears stale `target/debug/deps/integration-*` before each run |
 | All public functions return `String` | WASM ABI constraint — only `Copy` types and `String`/`&str` cross the WASM boundary cleanly |

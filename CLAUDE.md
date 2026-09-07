@@ -12,7 +12,7 @@ cargo build --target wasm32-unknown-unknown                      # verify WASM c
 ./test.sh <filter>                                               # run subset, e.g. ./test.sh parses_matrix
 wasm-pack build --target web                                     # browser ESModule → pkg/
 wasm-pack build --target nodejs                                  # Node.js → pkg/
-cargo build --bin jenkinsfile-tester --target wasm32-wasi --release  # CLI binary for wasmtime
+cargo build --bin jenkinsfile-tester --target wasm32-wasip1 --release  # CLI binary for wasmtime
 ./build-pages.sh                                                    # build WASM + assemble docs/ for GitHub Pages
 docker build -t jenkinsfile-tester .                                # Docker image (FROM scratch + wasmtime)
 ```
@@ -56,11 +56,9 @@ docker run --rm -i -v ./my-plugins.json:/registry.json \
 
 ## Environment constraints
 
-- **Rust toolchain:** `rustc 1.73.0` (system Rust on WSL — do not upgrade without testing)
-- **`pest` is pinned to `=2.7.15`** in `Cargo.toml` — newer versions require rustc ≥ 1.83
 - **WSL + `/mnt/c/` filesystem:** Use `./test.sh` — it deletes stale `target/debug/deps/integration-*`
   before every run. Do NOT use bare `cargo test` after edits on this filesystem.
-- **NO `std::sync::LazyLock`** — requires 1.80+. Use `std::sync::OnceLock` instead.
+- **`std::sync::LazyLock`** — available (toolchain ≥ 1.80). Prefer it over `OnceLock` for lazy statics.
 - **NO new Cargo.toml dependencies** without strong justification.
 
 ## Architecture
@@ -74,7 +72,7 @@ Parse failures are returned as structured JSON error objects, not Rust panics.
 | `src/parser/mod.rs` | pest → AST builder; `parse()` returns `Result<Pipeline, ParseError { message, line, col }>` |
 | `src/ast/mod.rs` | All AST types |
 | `src/ast/walk.rs` | AST traversal helpers: `collect_all_stages`, `collect_all_steps_recursive`, `walk_steps_with_stage`, `stage_steps/parallel/sequential` |
-| `src/plugins/mod.rs` | `PluginRegistry`: `from_json`, `merge`, `has_tool/step/option/trigger/agent_type`, `all_tools/steps`, `builtin_arc()` (OnceLock), 18 bundled plugins |
+| `src/plugins/mod.rs` | `PluginRegistry`: `from_json`, `merge`, `has_tool/step/option/trigger/agent_type`, `all_tools/steps`, `builtin_arc()` (LazyLock), 18 bundled plugins |
 | `src/validator/` | 22 diagnostic rules (E001–E006, W001–W011, S001–S005); `ValidationContext` holds `Arc<PluginRegistry>` + `ValidationMode` |
 | `src/tester/mod.rs` | 22 structural assertions |
 | `src/lib.rs` | WASM entry + public API (10 functions); `THREAD_REGISTRY` thread-local for persistent registry |
@@ -170,7 +168,7 @@ Parse failures are returned as structured JSON error objects, not Rust panics.
 
 ## PluginRegistry notes
 
-- `builtin_arc()` uses `std::sync::OnceLock` — parsed exactly once, shared via `Arc`
+- `builtin_arc()` uses `std::sync::LazyLock` — parsed exactly once, shared via `Arc`
 - `validate_with_registry(src, json)` merges user JSON into builtin per call
 - `init_registry(json)` stores merged registry in `thread_local! THREAD_REGISTRY`; `validate()` checks it first
 - `merge()` does **not** deduplicate by `plugin_id`; `all_tools()` can return duplicates (documented — TGAP-005/018)
@@ -236,7 +234,7 @@ NOT tuple variants — to serialize correctly with serde's internally-tagged enu
 
 ## Key implementation decisions (for future agents)
 
-- **`std::sync::OnceLock`** — use for lazy statics on Rust 1.73. `LazyLock` requires 1.80+.
+- **`std::sync::LazyLock`** — preferred for lazy statics (toolchain ≥ 1.80). `builtin_arc()` uses `LazyLock<Arc<PluginRegistry>>`.
 - **`parse()` return type** — `Result<Pipeline, ParseError>` where `ParseError { message, line: Option<u32>, col: Option<u32> }`.
 - **`ValidationContext`** — holds `Arc<PluginRegistry>`. Use `ValidationContext::with_registry(arc)` in tests.
 - **`call_expr` grammar** — `option_arg` tries `call_expr` before `value`; enables `buildDiscarder(logRotator(...))`.

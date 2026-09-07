@@ -19,7 +19,7 @@
 // }
 
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, LazyLock};
 
 /// Argument metadata for a plugin-contributed step
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -174,13 +174,13 @@ impl PluginRegistry {
     /// Returns a shared `Arc<PluginRegistry>` pre-loaded with the built-in plugin
     /// definitions. The JSON is parsed exactly once for the lifetime of the process.
     pub fn builtin_arc() -> Arc<PluginRegistry> {
-        static BUILTIN: OnceLock<Arc<PluginRegistry>> = OnceLock::new();
-        Arc::clone(BUILTIN.get_or_init(|| {
+        static BUILTIN: LazyLock<Arc<PluginRegistry>> = LazyLock::new(|| {
             Arc::new(
                 PluginRegistry::from_json(BUILTIN_REGISTRY_JSON)
                     .expect("Built-in plugin registry JSON is invalid — this is a programmer error"),
             )
-        }))
+        });
+        Arc::clone(&BUILTIN)
     }
 
     /// Returns a clone of the built-in plugin registry.
